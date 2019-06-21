@@ -1,0 +1,7 @@
+vscode/
+log/
+etc/
+old/
+input/
+debug.log
+.ruby-version
