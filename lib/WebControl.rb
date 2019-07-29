@@ -1,3 +1,8 @@
+
+# ↓↓↓ 神ドキュメント（seleniumメソッド集）↓↓↓
+# https://www.seleniumqref.com/api/webdriver_abc_ruby.html
+
+
 require 'selenium-webdriver'
 
 class WebControl

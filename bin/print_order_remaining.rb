@@ -10,9 +10,11 @@ gets
 
 csv = Csv.new
 
+#アマゾン注残.csvのPO番号の一覧を取得する
 po_numbers = csv.get_baby_po_numbers
 Log.info("ベビーのPO番号を取得しました。")
 
+##以下の処理は、print_label.rbと同一
 site = AmazonWebEDI.new
 
 if site.login_check()

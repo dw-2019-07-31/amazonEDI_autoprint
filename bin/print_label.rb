@@ -43,6 +43,7 @@ to_hacchubi = Date.strptime(to_hacchubi, "%Y%m%d")
 
 site = AmazonWebEDI.new
 
+# ログインのキャッシュが残っていれば、ログイン処理は行わない。
 if site.login_check()
     site.click_signin()
     puts "ユーザーIDとパスワードを入力してログインしてくだい。次の画面に進んだらEnterを押してください。"
@@ -56,6 +57,9 @@ end
 
 site.click_contact() if site.contact_check()
 
+# ダッドウェイでは、babyとpetの2つのアカウントを持っている。
+# babyとpet両方発注書/ラベル印刷をする必要がある。
+# baby ⇒ petの順で印刷するので、↓の処理でアカウントをbabyに切り替える。
 user = site.get_login_user()
 unless user.include?("Baby")
     site.switch_user_account("Baby") 
@@ -71,15 +75,18 @@ i = 0
     puts "発注日を降順でソートしてください。ソートしたらEnterを押してください。"
     gets
 
+    #対象の発注日のPO番号の一覧を取得する。
     po_number = Array.new
     po_numbers = site.get_po_numbers(from_hacchubi, to_hacchubi)
 
     unless po_numbers.empty?
 
         po_numbers.each do |po_number|
+            #発注書を印刷する処理
             site.print_purchase_order(po_number)
             Log.info("#{site.purchase_order_number}枚の発注書を印刷しました。PO:#{po_number}")
             puts "#{site.purchase_order_number}枚の発注書を印刷しました。"
+            #ラベルを印刷する処理
             site.print_shipping_label(po_number) 
             puts "#{site.shipping_label_number}枚の配送ラベルを印刷しました。"
             Log.info("#{site.purchase_order_number}枚の配送ラベルを印刷しました。PO:#{po_number}")
@@ -90,6 +97,7 @@ i = 0
         Log.info("印刷対象のPOが存在しません。開始日：「#{from_hacchubi}」終了日：「#{to_hacchubi}」")
     end
 
+    #アカウントをpetに切り替える。
     user = site.get_login_user()
     unless user.include?("Pet")
         site.switch_user_account("Pet") 

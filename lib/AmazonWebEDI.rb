@@ -5,7 +5,11 @@ require 'Date'
 class AmazonWebEDI < WebControl
 
     attr_reader :shipping_label_number, :purchase_order_number
+    SLEEP_TIME = 1.5
 
+    #コンストラクタ
+    #chromeをkioskモードで開き、amazonのTOPページに遷移する
+    #chromeの印刷ページはseleniumで制御不能なので、chromeのオプションでkioskモードを指定して、印刷ページが開いたら印刷が走るようにしておく必要がある。
     def initialize
         begin
             super
@@ -20,11 +24,13 @@ class AmazonWebEDI < WebControl
         end
     end
 
+    #TOPページを開く処理
     def get_top_page
         self.get("https://vendorcentral.amazon.co.jp/gp/vendor/sign-in")
         puts "TOPページが開きました。"
     end
 
+    #ログイン処理を自動でやっていた時の名残。今は使ってない。
     def open_top_page(id, password)
         begin
             click_signin()
@@ -171,11 +177,14 @@ class AmazonWebEDI < WebControl
         wait_for_noelement_by_class(spinner_class_name)
         begin
             while true do
+                #「確認済みのPO」の表を丸ごと取ってくる
                 elements = find_elements_by_class(class_name)
                 elements.each do |element|
+                    #JPYでsplitして行を取得
                     rows = element.text.split("JPY\n")
                     end_suffix = rows.length - 1
 
+                    #行の情報からPO番号を抽出
                     rows.each do |row|
                         columns = row.split("\n")
                         @order_date = columns[2]
@@ -193,6 +202,8 @@ class AmazonWebEDI < WebControl
                     end
 
                 end
+                #「確認済みのPO」はajax使ってるので表の最終行の発注日が対象期間を抜けるまでスクロールする
+                #例：対象期間が2019/07/11～2019/07/12の場合、発注日が2019/07/10が出てくるまでPO番号取得処理を繰り返す。
                 if @order_date >= from_hacchubi
                     page_down_by_class(class_name)
                 else
@@ -208,12 +219,16 @@ class AmazonWebEDI < WebControl
         end
         po_numbers.uniq!
         po_numbers.sort!
+        #return入れないとなぜかエラーになる・・・。
         return po_numbers
     end
 
+    #印刷系の処理で不具合が出ると大方画面描画前に印刷処理が走ってしまうことに原因があるので、wait_for_elementとsleepの処理（待機処理）を散りばめた。
+    #印刷処理で不具合が出たらまずsleepの時間を見直してください。
     def print_shipping_label(po_number)
         exec_upper_limit = 3
         exec_number = 0
+        #querystringでPO番号を指定すれば、ラベル画面が開ける
         url = "https://vendorcentral.amazon.co.jp/gp/vendor/members/po-management/shipping-label?order-orderId=#{po_number}"
                
         begin
@@ -221,8 +236,19 @@ class AmazonWebEDI < WebControl
             xpath = '/html/body/div[1]/div[3]/img'
 
             open_new_tab(url)
-            wait_for_element_by_xpath(xpath)
-            sleep 0.8
+            
+            loop do 
+                wait_for_element_by_xpath(xpath)
+                # 配送ラベルページに表示されるバーコードのサイズをjavascriptで取得している。
+                # 画像が正常に取得できるまでリロードを繰り返す。
+                result = @driver.execute_script('function getElementByXpath(path) {return document.evaluate(path, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;} obj = getElementByXpath("/html/body/div[1]/div[3]/img"); var image = new Image(); image.src = obj.src; var result = image.width; return result;')
+                if result != 0
+                    break
+                else
+                    @driver.navigate.refresh
+                end
+            end
+            sleep SLEEP_TIME
             @driver.execute_script('return window.print();')
             puts "PO番号：[#{po_number}]を印刷しています。"
         rescue => exception
@@ -233,7 +259,7 @@ class AmazonWebEDI < WebControl
         else
             @shipping_label_number += 1
         ensure
-            sleep 0.8
+            sleep SLEEP_TIME
             close_new_tab()
         end
 
@@ -243,6 +269,7 @@ class AmazonWebEDI < WebControl
         
     end
 
+    #print_shipping_labelとやってることはほぼ一緒
     def print_purchase_order(po_number)
         exec_upper_limit = 3
         exec_number = 0
@@ -255,7 +282,7 @@ class AmazonWebEDI < WebControl
 
             @driver.execute_script("document.body.style.zoom='75%'")
             class_name = 'grid-overlay-spinner'
-            sleep 0.7
+            sleep SLEEP_TIME
             wait_for_noelement_by_class(class_name)
             @driver.execute_script('return window.print();')
             puts "PO番号：[#{po_number}]を印刷しています。"
@@ -267,7 +294,7 @@ class AmazonWebEDI < WebControl
         else
             @purchase_order_number += 1
         ensure
-            sleep 0.7
+            sleep SLEEP_TIME
             close_new_tab()
         end
     end
